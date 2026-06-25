@@ -8,12 +8,13 @@ Excel データを SQLite に取り込み、ブラウザから案件・顧客・
 ## フォルダ構成
 
 <!-- TREE:START -->
-> 最終更新: 2026/6/25 12:09:14
+> 最終更新: 2026/6/25 15:01:29
 ```
 TestApp01/
 ├── 📂 .claude/  ← Claude Codeエージェント・フック設定
 │   ├── 📂 agents/  ← カスタムエージェント定義
 │   │   └── e2e-tester.md  ← E2Eテスト自動実行エージェント定義
+│   ├── auto-commit.js
 │   ├── settings.json  ← PostToolUseフック設定
 │   └── update-readme.js  ← README自動更新スクリプト
 ├── 📂 data/  ← データベース（起動時に自動生成）
@@ -42,13 +43,15 @@ TestApp01/
 ├── 📂 tests/  ← E2Eテスト
 │   ├── 📂 レポート/  ← テスト結果の出力先
 │   │   ├── playwright-results.json  ← Playwright実行結果（JSON）
-│   │   └── test-report.xlsx  ← テスト結果レポート（Excel）
+│   │   ├── test-report.md
+│   │   └── testcases-meta.json
 │   ├── assignment.spec.ts
 │   ├── customers.spec.ts
 │   ├── dashboard.spec.ts
 │   ├── generate-report.js  ← テスト結果 → xlsx 変換スクリプト
 │   ├── invoices.spec.ts
 │   └── projects.spec.ts
+├── CLAUDE.md
 ├── package.json  ← 依存パッケージ定義
 ├── playwright.config.ts  ← Playwright設定
 ├── README.md  ← プロジェクト説明（自動更新）
@@ -80,9 +83,9 @@ node server.js
 # テスト実行（サーバーが起動している状態で）
 npx playwright test
 
-# テスト結果を xlsx に変換
+# テスト結果レポートを生成（差分更新）
 node tests/generate-report.js
-# → tests/レポート/test-report.xlsx に出力
+# → tests/レポート/test-report.md に出力
 ```
 
 テスト結果は `tests/レポート/` に保存されます。
