@@ -48,15 +48,22 @@
   </div>
 
   <div class="card">
-    <div class="card-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="card-header" style="display:flex;align-items:center;gap:8px">
       <span>請求・入金一覧</span>
       <div class="spacer"></div>
-      <select class="filter-select" id="filter-status" onchange="applyFilter()">
-        <option value="">全ステータス</option>
-        <option value="未入金">未入金のみ</option>
-        <option value="入金済">入金済のみ</option>
-      </select>
-      <input class="search-box" id="search" placeholder="🔍 案件名・顧客名で検索" oninput="applyFilter()">
+      <input class="search-box" id="search" placeholder="🔍 案件名・顧客名で検索" oninput="applyFilter()" style="width:190px">
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">↓ CSV</button>
+      <button class="filter-toggle-btn" id="filter-toggle-btn" onclick="toggleFilterSection()">🔍 絞り込み <span id="filter-arrow">▼</span></button>
+    </div>
+    <div class="filter-bar" id="filter-section">
+      <div>
+        <div class="filter-group-label">入金状況</div>
+        <div class="chip-group" id="chips-status">
+          <button class="chip active" data-val="" onclick="setChip(this,'status')">すべて</button>
+          <button class="chip" data-val="未入金" onclick="setChip(this,'status')">未入金</button>
+          <button class="chip" data-val="入金済" onclick="setChip(this,'status')">入金済</button>
+        </div>
+      </div>
     </div>
     <div class="card-body no-pad">
       <table class="data-table">
@@ -70,6 +77,7 @@
         <tbody id="invoices-tbody"><tr><td colspan="10" class="empty-state">読込中…</td></tr></tbody>
       </table>
     </div>
+    <div class="pagination" id="pagination" style="display:none"></div>
   </div>
 </main>
 
@@ -114,7 +122,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-let allInvoices = [];
+let allInvoices = [], filteredInvoices = [], currentPage = 1;
+const PAGE_SIZE = 10;
+let filterStatus = '';
 const fmt = v => new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(v||0);
 
 async function loadInvoices() {
@@ -128,28 +138,43 @@ async function loadInvoices() {
   applyFilter();
 }
 
+function setChip(el, type) {
+  const group = document.getElementById('chips-' + type);
+  group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  if (type === 'status') filterStatus = el.dataset.val;
+  applyFilter();
+}
+
+function toggleFilterSection() {
+  const sec = document.getElementById('filter-section');
+  const arrow = document.getElementById('filter-arrow');
+  const btn = document.getElementById('filter-toggle-btn');
+  const hidden = sec.classList.toggle('hidden');
+  btn.classList.toggle('active', !hidden);
+  arrow.textContent = hidden ? '▼' : '▲';
+}
+
 function applyFilter() {
-  const st = document.getElementById('filter-status').value;
   const q = document.getElementById('search').value.toLowerCase();
-  const filtered = allInvoices.filter(i =>
-    (!st || i.payment_status === st) &&
+  filteredInvoices = allInvoices.filter(i =>
+    (!filterStatus || i.payment_status === filterStatus) &&
     (!q || (i.project_name||'').toLowerCase().includes(q) || (i.customer_name||'').toLowerCase().includes(q))
   );
-  renderTable(filtered);
+  currentPage = 1;
+  renderPage();
 }
 
-function payBadge(status, due) {
-  const today = new Date();
-  const dueDate = due ? new Date(due) : null;
-  if (status === '入金済') return '<span class="badge badge-paid">入金済</span>';
-  if (dueDate && dueDate < today) return '<span class="badge badge-overdue">期限超過</span>';
-  return '<span class="badge badge-unpaid">未入金</span>';
-}
-
-function renderTable(invoices) {
+function renderPage() {
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = filteredInvoices.slice(start, start + PAGE_SIZE);
   const tbody = document.getElementById('invoices-tbody');
-  if (!invoices.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty-state">該当する請求がありません</td></tr>'; return; }
-  tbody.innerHTML = invoices.map(inv => {
+  if (!filteredInvoices.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">該当する請求がありません</td></tr>';
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
+  tbody.innerHTML = page.map(inv => {
     const today = new Date();
     const isOverdue = inv.payment_status !== '入金済' && inv.due_date && new Date(inv.due_date) < today;
     return `<tr${isOverdue ? ' style="background:#fff8f8"' : ''}>
@@ -159,7 +184,7 @@ function renderTable(invoices) {
       <td><span class="badge" style="background:#f0f4ff;color:#1e3a5f">${inv.invoice_type||'-'}</span></td>
       <td style="font-size:12px">${inv.invoice_date||'-'}</td>
       <td class="amount">${fmt(inv.amount)}</td>
-      <td style="font-size:12px${isOverdue?' ;color:var(--danger);font-weight:600':''}">
+      <td style="font-size:12px${isOverdue?';color:var(--danger);font-weight:600':''}">
         ${inv.due_date||'-'}${isOverdue?' ⚠️':''}
       </td>
       <td>${payBadge(inv.payment_status, inv.due_date)}</td>
@@ -171,6 +196,49 @@ function renderTable(invoices) {
       </td>
     </tr>`;
   }).join('');
+  renderPagination();
+}
+
+function renderPagination() {
+  const total = filteredInvoices.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const pg = document.getElementById('pagination');
+  if (pages <= 1) { pg.style.display = 'none'; return; }
+  pg.style.display = 'flex';
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, total);
+  const nums = Array.from({length: pages}, (_, i) => i + 1)
+    .map(n => `<button class="page-btn${n===currentPage?' active':''}" onclick="goPage(${n})">${n}</button>`).join('');
+  pg.innerHTML = `<span class="page-info">${start}–${end} / ${total}件</span>
+    <div class="page-btns">
+      <button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>
+      ${nums}
+      <button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>›</button>
+    </div>`;
+}
+
+function goPage(n) {
+  const pages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  if (n < 1 || n > pages) return;
+  currentPage = n; renderPage();
+}
+
+function exportCSV() {
+  const headers = ['請求番号','案件名','顧客名','請求区分','請求日','請求金額','支払期限','入金状況','入金日'];
+  const rows = filteredInvoices.map(i => [i.invoice_number||'', i.project_name||'', i.customer_name||'', i.invoice_type||'', i.invoice_date||'', i.amount||0, i.due_date||'', i.payment_status||'', i.payment_date||'']);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `請求管理_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'-')}.csv`;
+  a.click();
+}
+
+function payBadge(status, due) {
+  const today = new Date();
+  const dueDate = due ? new Date(due) : null;
+  if (status === '入金済') return '<span class="badge badge-paid">入金済</span>';
+  if (dueDate && dueDate < today) return '<span class="badge badge-overdue">期限超過</span>';
+  return '<span class="badge badge-unpaid">未入金</span>';
 }
 
 function openModal(invoice) {

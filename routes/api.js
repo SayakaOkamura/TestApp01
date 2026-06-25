@@ -5,9 +5,33 @@ const { getDB } = require('../db/init');
 // ダッシュボード集計
 router.get('/dashboard', (req, res) => {
   const db = getDB();
+  const { period } = req.query;
 
-  const contractedAmount = db.prepare(`SELECT COALESCE(SUM(contract_amount),0) as v FROM projects WHERE status='契約済'`).get().v;
-  const receivedAmount   = db.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM invoices WHERE payment_status='入金済'`).get().v;
+  // 期間フィルターの日付範囲を計算
+  const now = new Date();
+  let dateFrom = null, dateTo = null;
+  if (period === 'month') {
+    dateFrom = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (period === 'last_month') {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    dateFrom = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+    dateTo   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (period === 'quarter') {
+    const qStart = Math.floor(now.getMonth() / 3) * 3;
+    dateFrom = `${now.getFullYear()}-${String(qStart+1).padStart(2,'0')}-01`;
+  }
+
+  const pFilter = dateFrom
+    ? (dateTo ? ` AND contract_date >= '${dateFrom}' AND contract_date < '${dateTo}'`
+               : ` AND contract_date >= '${dateFrom}'`)
+    : '';
+  const iFilter = dateFrom
+    ? (dateTo ? ` AND payment_date >= '${dateFrom}' AND payment_date < '${dateTo}'`
+               : ` AND payment_date >= '${dateFrom}'`)
+    : '';
+
+  const contractedAmount = db.prepare(`SELECT COALESCE(SUM(contract_amount),0) as v FROM projects WHERE status='契約済'${pFilter}`).get().v;
+  const receivedAmount   = db.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM invoices WHERE payment_status='入金済'${iFilter}`).get().v;
   const unpaidAmount     = db.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM invoices WHERE payment_status='未入金'`).get().v;
   const pipelineAmount   = db.prepare(`SELECT COALESCE(SUM(estimated_amount),0) as v FROM projects WHERE status NOT IN ('契約済','失注')`).get().v;
   const projectCount     = db.prepare(`SELECT COUNT(*) as v FROM projects`).get().v;

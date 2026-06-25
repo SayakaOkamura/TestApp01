@@ -35,19 +35,33 @@
   <div class="summary-row" id="summary-row"></div>
 
   <div class="card">
-    <div class="card-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="card-header" style="display:flex;align-items:center;gap:8px">
       <span>顧客台帳</span>
       <div class="spacer"></div>
-      <select class="filter-select" id="filter-building" onchange="applyFilter()">
-        <option value="">全建物種別</option>
-        <option>一戸建て</option><option>マンション</option>
-      </select>
-      <select class="filter-select" id="filter-source" onchange="applyFilter()">
-        <option value="">全来店経路</option>
-        <option>チラシ</option><option>WEB検索</option><option>紹介（山本様）</option>
-        <option>SNS広告</option><option>展示場来場</option>
-      </select>
-      <input class="search-box" id="search" placeholder="🔍 氏名・住所で検索" oninput="applyFilter()">
+      <input class="search-box" id="search" placeholder="🔍 氏名・住所で検索" oninput="applyFilter()" style="width:190px">
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">↓ CSV</button>
+      <button class="filter-toggle-btn" id="filter-toggle-btn" onclick="toggleFilterSection()">🔍 絞り込み <span id="filter-arrow">▼</span></button>
+    </div>
+    <div class="filter-bar" id="filter-section">
+      <div>
+        <div class="filter-group-label">建物種別</div>
+        <div class="chip-group" id="chips-building">
+          <button class="chip active" data-val="" onclick="setChip(this,'building')">すべて</button>
+          <button class="chip" data-val="一戸建て" onclick="setChip(this,'building')">一戸建て</button>
+          <button class="chip" data-val="マンション" onclick="setChip(this,'building')">マンション</button>
+        </div>
+      </div>
+      <div>
+        <div class="filter-group-label">来店経路</div>
+        <div class="chip-group" id="chips-source">
+          <button class="chip active" data-val="" onclick="setChip(this,'source')">すべて</button>
+          <button class="chip" data-val="チラシ" onclick="setChip(this,'source')">チラシ</button>
+          <button class="chip" data-val="WEB検索" onclick="setChip(this,'source')">WEB検索</button>
+          <button class="chip" data-val="紹介" onclick="setChip(this,'source')">紹介</button>
+          <button class="chip" data-val="SNS広告" onclick="setChip(this,'source')">SNS広告</button>
+          <button class="chip" data-val="展示場来場" onclick="setChip(this,'source')">展示場来場</button>
+        </div>
+      </div>
     </div>
     <div class="card-body no-pad">
       <table class="data-table">
@@ -60,6 +74,7 @@
         <tbody id="customers-tbody"><tr><td colspan="8" class="empty-state">読込中…</td></tr></tbody>
       </table>
     </div>
+    <div class="pagination" id="pagination" style="display:none"></div>
   </div>
 </main>
 
@@ -110,7 +125,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-let allCustomers = [];
+let allCustomers = [], filteredCustomers = [], currentPage = 1;
+const PAGE_SIZE = 10;
+let filterBuilding = '', filterSource = '';
 
 async function loadCustomers() {
   const res = await fetch('/api/customers');
@@ -121,7 +138,7 @@ async function loadCustomers() {
 
 function renderSummary() {
   const detached = allCustomers.filter(c => c.building_type === '一戸建て').length;
-  const mansion = allCustomers.filter(c => c.building_type === 'マンション').length;
+  const mansion  = allCustomers.filter(c => c.building_type === 'マンション').length;
   document.getElementById('summary-row').innerHTML = `
     <div class="summary-chip">全 <strong>${allCustomers.length}</strong> 件</div>
     <div class="summary-chip">一戸建て <strong>${detached}</strong> 件</div>
@@ -129,22 +146,45 @@ function renderSummary() {
   `;
 }
 
-function applyFilter() {
-  const building = document.getElementById('filter-building').value;
-  const source = document.getElementById('filter-source').value;
-  const q = document.getElementById('search').value.toLowerCase();
-  const filtered = allCustomers.filter(c =>
-    (!building || c.building_type === building) &&
-    (!source || (c.source||'').includes(source.replace(/（.*）/,''))) &&
-    (!q || (c.name||'').toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q))
-  );
-  renderTable(filtered);
+function setChip(el, type) {
+  const group = document.getElementById('chips-' + type);
+  group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  if (type === 'building') filterBuilding = el.dataset.val;
+  if (type === 'source')   filterSource   = el.dataset.val;
+  applyFilter();
 }
 
-function renderTable(customers) {
+function toggleFilterSection() {
+  const sec = document.getElementById('filter-section');
+  const arrow = document.getElementById('filter-arrow');
+  const btn = document.getElementById('filter-toggle-btn');
+  const hidden = sec.classList.toggle('hidden');
+  btn.classList.toggle('active', !hidden);
+  arrow.textContent = hidden ? '▼' : '▲';
+}
+
+function applyFilter() {
+  const q = document.getElementById('search').value.toLowerCase();
+  filteredCustomers = allCustomers.filter(c =>
+    (!filterBuilding || c.building_type === filterBuilding) &&
+    (!filterSource   || (c.source||'').includes(filterSource)) &&
+    (!q || (c.name||'').toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q))
+  );
+  currentPage = 1;
+  renderPage();
+}
+
+function renderPage() {
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = filteredCustomers.slice(start, start + PAGE_SIZE);
   const tbody = document.getElementById('customers-tbody');
-  if (!customers.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">該当する顧客がいません</td></tr>'; return; }
-  tbody.innerHTML = customers.map(c => `<tr>
+  if (!filteredCustomers.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">該当する顧客がいません</td></tr>';
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
+  tbody.innerHTML = page.map(c => `<tr>
     <td style="font-weight:600">${c.name}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${c.address||'-'}</td>
     <td>${c.building_type||'-'}</td>
@@ -157,7 +197,44 @@ function renderTable(customers) {
       <button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id}, '${(c.name||'').replace(/'/g,"\\'")}')">削除</button>
     </td>
   </tr>`).join('');
+  renderPagination();
 }
+
+function renderPagination() {
+  const total = filteredCustomers.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const pg = document.getElementById('pagination');
+  if (pages <= 1) { pg.style.display = 'none'; return; }
+  pg.style.display = 'flex';
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, total);
+  const nums = Array.from({length: pages}, (_, i) => i + 1)
+    .map(n => `<button class="page-btn${n===currentPage?' active':''}" onclick="goPage(${n})">${n}</button>`).join('');
+  pg.innerHTML = `<span class="page-info">${start}–${end} / ${total}件</span>
+    <div class="page-btns">
+      <button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>
+      ${nums}
+      <button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>›</button>
+    </div>`;
+}
+
+function goPage(n) {
+  const pages = Math.ceil(filteredCustomers.length / PAGE_SIZE);
+  if (n < 1 || n > pages) return;
+  currentPage = n; renderPage();
+}
+
+function exportCSV() {
+  const headers = ['氏名','住所','建物種別','築年数','来店経路','担当者','電話番号'];
+  const rows = filteredCustomers.map(c => [c.name, c.address||'', c.building_type||'', c.building_age||'', c.source||'', c.staff||'', c.phone||'']);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `顧客管理_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'-')}.csv`;
+  a.click();
+}
+
+function renderTable(customers) { filteredCustomers = customers; currentPage = 1; renderPage(); }
 
 function openModal(customer) {
   document.getElementById('modal-title').textContent = customer ? '顧客編集' : '新規顧客登録';

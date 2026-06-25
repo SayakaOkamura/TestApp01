@@ -39,6 +39,14 @@
   <!-- 緊急アラート -->
   <div id="urgent-section"></div>
 
+  <!-- 期間フィルター -->
+  <div class="period-tabs">
+    <button class="period-tab" onclick="setPeriod('month',this)">今月</button>
+    <button class="period-tab" onclick="setPeriod('last_month',this)">先月</button>
+    <button class="period-tab" onclick="setPeriod('quarter',this)">今四半期</button>
+    <button class="period-tab active" onclick="setPeriod('all',this)">全期間</button>
+  </div>
+
   <!-- KPI Cards -->
   <div class="kpi-grid">
     <div class="kpi-card contracted">
@@ -202,8 +210,17 @@ function toggleUrgency(level, headerEl) {
   URGENCY_COLLAPSED[level] = !hidden;
 }
 
+let currentPeriod = 'all';
+
+function setPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadDashboard();
+}
+
 async function loadDashboard() {
-  const res = await fetch('/api/dashboard');
+  const res = await fetch(`/api/dashboard?period=${currentPeriod}`);
   const d = await res.json();
 
   document.getElementById('kpi-contracted').textContent = fmt(d.kpi.contractedAmount);

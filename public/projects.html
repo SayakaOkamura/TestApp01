@@ -35,21 +35,44 @@
   <div class="summary-row" id="summary-row"></div>
 
   <div class="card">
-    <div class="card-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="card-header" style="display:flex;align-items:center;gap:8px">
       <span>案件一覧</span>
       <div class="spacer"></div>
-      <button class="tab-btn" id="btn-urgent" onclick="toggleUrgentOnly(this)" style="background:var(--card);color:#dc2626;border-color:#fca5a5;font-weight:700">🚨 緊急のみ</button>
-      <select class="filter-select" id="filter-status" onchange="applyFilter()">
-        <option value="">全ステータス</option>
-        <option>契約済</option><option>商談中</option><option>見積提出済</option>
-        <option>現地調査済</option><option>初回訪問済</option><option>失注</option>
-      </select>
-      <select class="filter-select" id="filter-work" onchange="applyFilter()">
-        <option value="">全工事種別</option>
-        <option>外装</option><option>水回り</option><option>内装</option>
-        <option>バリアフリー</option><option>省エネ</option><option>建具</option>
-      </select>
-      <input class="search-box" id="search" placeholder="🔍 案件名・顧客名で検索" oninput="applyFilter()">
+      <input class="search-box" id="search" placeholder="🔍 案件名・顧客名で検索" oninput="applyFilter()" style="width:190px">
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">↓ CSV</button>
+      <button class="filter-toggle-btn" id="filter-toggle-btn" onclick="toggleFilterSection()">🔍 絞り込み <span id="filter-arrow">▼</span></button>
+    </div>
+    <div class="filter-bar" id="filter-section">
+      <div>
+        <div class="filter-group-label">🚨 緊急</div>
+        <div class="chip-group">
+          <button class="chip urgent" id="chip-urgent" onclick="toggleUrgent(this)">緊急のみ</button>
+        </div>
+      </div>
+      <div>
+        <div class="filter-group-label">ステータス</div>
+        <div class="chip-group" id="chips-status">
+          <button class="chip active" data-val="" onclick="setChip(this,'status')">すべて</button>
+          <button class="chip" data-val="契約済" onclick="setChip(this,'status')">契約済</button>
+          <button class="chip" data-val="商談中" onclick="setChip(this,'status')">商談中</button>
+          <button class="chip" data-val="見積提出済" onclick="setChip(this,'status')">見積提出済</button>
+          <button class="chip" data-val="現地調査済" onclick="setChip(this,'status')">現地調査済</button>
+          <button class="chip" data-val="初回訪問済" onclick="setChip(this,'status')">初回訪問済</button>
+          <button class="chip" data-val="失注" onclick="setChip(this,'status')">失注</button>
+        </div>
+      </div>
+      <div>
+        <div class="filter-group-label">工事種別</div>
+        <div class="chip-group" id="chips-work">
+          <button class="chip active" data-val="" onclick="setChip(this,'work')">すべて</button>
+          <button class="chip" data-val="外装" onclick="setChip(this,'work')">外装</button>
+          <button class="chip" data-val="水回り" onclick="setChip(this,'work')">水回り</button>
+          <button class="chip" data-val="内装" onclick="setChip(this,'work')">内装</button>
+          <button class="chip" data-val="バリアフリー" onclick="setChip(this,'work')">バリアフリー</button>
+          <button class="chip" data-val="省エネ" onclick="setChip(this,'work')">省エネ</button>
+          <button class="chip" data-val="建具" onclick="setChip(this,'work')">建具</button>
+        </div>
+      </div>
     </div>
     <div class="card-body no-pad">
       <table class="data-table">
@@ -63,6 +86,7 @@
         <tbody id="projects-tbody"><tr><td colspan="9" class="empty-state">読込中…</td></tr></tbody>
       </table>
     </div>
+    <div class="pagination" id="pagination" style="display:none"></div>
   </div>
 </main>
 
@@ -118,8 +142,10 @@
 <div class="toast" id="toast"></div>
 
 <script>
-let allProjects = [];
+let allProjects = [], filteredProjects = [], currentPage = 1;
+const PAGE_SIZE = 10;
 let showUrgentOnly = false;
+let filterStatus = '', filterWork = '';
 
 const STATUS_MAP = { '契約済':'contracted','商談中':'negotiating','見積提出済':'quoted','現地調査済':'visited','初回訪問済':'surveyed','失注':'lost' };
 const fmt = v => new Intl.NumberFormat('ja-JP', { style:'currency', currency:'JPY', maximumFractionDigits:0 }).format(v||0);
@@ -128,7 +154,6 @@ function getUrgency(p) {
   const notes = (p.notes || '').toLowerCase();
   const today = new Date(); today.setHours(0,0,0,0);
   const pd = p.planned_start_date ? new Date(p.planned_start_date) : null;
-
   if (notes.includes('急ぎ') || notes.includes('雨漏り') || notes.includes('緊急'))
     return { level: 'critical', reason: '緊急対応' };
   if (pd && !isNaN(pd) && pd < today && p.status !== '契約済')
@@ -159,52 +184,66 @@ function renderSummary() {
   `;
 }
 
-function toggleUrgentOnly(btn) {
-  showUrgentOnly = !showUrgentOnly;
-  btn.style.background = showUrgentOnly ? '#dc2626' : 'var(--card)';
-  btn.style.color = showUrgentOnly ? '#fff' : '#dc2626';
+function setChip(el, type) {
+  const group = document.getElementById('chips-' + type);
+  group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  if (type === 'status') filterStatus = el.dataset.val;
+  if (type === 'work')   filterWork   = el.dataset.val;
   applyFilter();
 }
 
+function toggleUrgent(btn) {
+  showUrgentOnly = !showUrgentOnly;
+  btn.classList.toggle('active', showUrgentOnly);
+  applyFilter();
+}
+
+function toggleFilterSection() {
+  const sec = document.getElementById('filter-section');
+  const btn = document.getElementById('filter-toggle-btn');
+  const arrow = document.getElementById('filter-arrow');
+  const hidden = sec.classList.toggle('hidden');
+  btn.classList.toggle('active', !hidden);
+  arrow.textContent = hidden ? '▼' : '▲';
+}
+
 function applyFilter() {
-  const status = document.getElementById('filter-status').value;
-  const work = document.getElementById('filter-work').value;
   const q = document.getElementById('search').value.toLowerCase();
   let filtered = allProjects.filter(p =>
-    (!status || p.status === status) &&
-    (!work || p.work_type === work) &&
+    (!filterStatus || p.status === filterStatus) &&
+    (!filterWork   || p.work_type === filterWork) &&
     (!q || p.name.toLowerCase().includes(q) || (p.customer_name||'').toLowerCase().includes(q))
   );
   if (showUrgentOnly) filtered = filtered.filter(p => getUrgency(p) !== null);
-  // 緊急→要注意→通常 の順に並べ替え
   filtered.sort((a, b) => {
-    const ua = getUrgency(a), ub = getUrgency(b);
     const rank = u => !u ? 2 : u.level === 'critical' ? 0 : 1;
-    return rank(ua) - rank(ub);
+    return rank(getUrgency(a)) - rank(getUrgency(b));
   });
-  renderTable(filtered);
+  filteredProjects = filtered;
+  currentPage = 1;
+  renderPage();
 }
 
-function renderTable(projects) {
+function renderPage() {
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = filteredProjects.slice(start, start + PAGE_SIZE);
   const tbody = document.getElementById('projects-tbody');
-  if (!projects.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty-state">該当する案件がありません</td></tr>'; return; }
-  tbody.innerHTML = projects.map(p => {
+  if (!filteredProjects.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">該当する案件がありません</td></tr>';
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
+  tbody.innerHTML = page.map(p => {
     const amount = p.status === '契約済' ? fmt(p.contract_amount) : fmt(p.estimated_amount);
     const urg = getUrgency(p);
-    const rowCls = urg ? `class="row-${urg.level}"` : '';
-    const urgTag = urg ? `<span class="urgency-tag ${urg.level}">${urg.reason}</span> ` : '';
-    return `<tr ${rowCls}>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${urgTag}${p.name}</td>
+    return `<tr${urg ? ` class="row-${urg.level}"` : ''}>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${urg ? `<span class="urgency-tag ${urg.level}">${urg.reason}</span> ` : ''}${p.name}</td>
       <td>${p.customer_name||'-'}</td>
       <td>${p.work_type||'-'}</td>
       <td>${p.staff||'-'}</td>
       <td><span class="badge badge-${STATUS_MAP[p.status]||'lost'}">${p.status}</span></td>
-      <td class="center">
-        <div class="prob-bar">
-          <div class="bar-bg"><div class="bar-fill" style="width:${p.probability||0}%"></div></div>
-          <span class="bar-label">${p.probability||0}%</span>
-        </div>
-      </td>
+      <td class="center"><div class="prob-bar"><div class="bar-bg"><div class="bar-fill" style="width:${p.probability||0}%"></div></div><span class="bar-label">${p.probability||0}%</span></div></td>
       <td class="amount">${amount}</td>
       <td>${p.contract_date||'-'}</td>
       <td style="white-space:nowrap">
@@ -213,6 +252,48 @@ function renderTable(projects) {
       </td>
     </tr>`;
   }).join('');
+  renderPagination();
+}
+
+function renderPagination() {
+  const total = filteredProjects.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const pg = document.getElementById('pagination');
+  if (pages <= 1) { pg.style.display = 'none'; return; }
+  pg.style.display = 'flex';
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, total);
+  const nums = Array.from({length: pages}, (_, i) => i + 1)
+    .map(n => `<button class="page-btn${n === currentPage ? ' active' : ''}" onclick="goPage(${n})">${n}</button>`)
+    .join('');
+  pg.innerHTML = `<span class="page-info">${start}–${end} / ${total}件</span>
+    <div class="page-btns">
+      <button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>
+      ${nums}
+      <button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>›</button>
+    </div>`;
+}
+
+function goPage(n) {
+  const pages = Math.ceil(filteredProjects.length / PAGE_SIZE);
+  if (n < 1 || n > pages) return;
+  currentPage = n;
+  renderPage();
+}
+
+function exportCSV() {
+  const headers = ['案件名','顧客名','工事種別','担当者','ステータス','確度(%)','金額','契約日'];
+  const rows = filteredProjects.map(p => [
+    p.name, p.customer_name||'', p.work_type||'', p.staff||'', p.status,
+    p.probability||0,
+    p.status==='契約済' ? p.contract_amount||0 : p.estimated_amount||0,
+    p.contract_date||''
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `案件管理_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'-')}.csv`;
+  a.click();
 }
 
 function openModal(project) {

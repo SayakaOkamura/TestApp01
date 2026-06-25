@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const body   = card.querySelector('.card-body');
     if (!header || !body) return;
 
+    // テーブルを含むカード（.no-pad）は折りたたみ対象外
+    if (body.classList.contains('no-pad')) return;
+
     const btn = document.createElement('button');
     btn.className = 'card-collapse-btn';
     btn.textContent = '▲';
