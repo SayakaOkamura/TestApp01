@@ -80,7 +80,7 @@ body.sidebar-mini .sidebar-mini-toggle { justify-content: center; padding: 10px 
   transition: all .15s;
 }
 .sidebar-nav li a:hover { background: var(--primary-light); color: #fff; }
-.sidebar-nav li.active a { background: var(--accent); color: #fff; font-weight: 600; }
+.sidebar-nav li.active a { background: rgba(255,255,255,.18); color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 #fff; }
 .sidebar-footer { padding: 16px 20px; color: rgba(255,255,255,.35); font-size: 11px; border-top: 1px solid rgba(255,255,255,.08); }
 
 /* ===== MAIN CONTENT ===== */
@@ -174,8 +174,9 @@ body.sidebar-mini .sidebar-mini-toggle { justify-content: center; padding: 10px 
   vertical-align: middle;
 }
 .data-table tbody tr:last-child td { border-bottom: none; }
-.data-table tbody tr:hover { background: #f8f9fb; }
-.data-table .amount { text-align: right; font-weight: 600; white-space: nowrap; }
+.data-table tbody tr:nth-child(even) { background: #f4f9fd; }
+.data-table tbody tr:hover { background: #e8f3fb; }
+.data-table .amount { text-align: right; font-weight: 600; white-space: nowrap; font-size: 14px; font-variant-numeric: tabular-nums; }
 .data-table .center { text-align: center; }
 
 /* ===== STATUS BADGES ===== */
