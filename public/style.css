@@ -1,8 +1,8 @@
 :root {
-  --primary: #1a2e4a;
-  --primary-light: #2d4a6e;
-  --accent: #d64d6e;
-  --accent-light: #fde8ed;
+  --primary: #1a3528;
+  --primary-light: #2d5440;
+  --accent: #34a870;
+  --accent-light: #e8f7ee;
   --success: #1a8a5a;
   --success-light: #e6f5ef;
   --warning: #d97706;
@@ -11,11 +11,11 @@
   --danger-light: #fdecea;
   --info: #1565c0;
   --info-light: #e3f0ff;
-  --bg: #f1f4f9;
+  --bg: #f0f4f1;
   --card: #ffffff;
   --text: #1e293b;
   --text-muted: #64748b;
-  --border: #e2e8f0;
+  --border: #dde8e2;
   --sidebar-w: 220px;
   --sidebar-w-mini: 56px;
   --shadow: 0 1px 4px rgba(0,0,0,.08), 0 0 1px rgba(0,0,0,.04);
@@ -204,7 +204,7 @@ body.sidebar-mini .sidebar-mini-toggle { justify-content: center; padding: 10px 
 .btn-primary  { background: var(--primary);  color: #fff; }
 .btn-primary:hover  { background: var(--primary-light); }
 .btn-accent   { background: var(--accent);   color: #fff; }
-.btn-accent:hover   { background: #c43560; }
+.btn-accent:hover   { background: #28926a; }
 .btn-success  { background: var(--success);  color: #fff; }
 .btn-success:hover  { background: #15724c; }
 .btn-outline  { background: transparent; color: var(--primary); border: 1.5px solid var(--border); }
