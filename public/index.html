@@ -21,8 +21,11 @@
     <li class="active"><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
     <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
     <li><a href="assignment.html"><span class="nav-icon">🎯</span><span class="nav-text">担当管理</span></a></li>
+    <li><a href="actions.html"><span class="nav-icon">✅</span><span class="nav-text">アクションログ</span></a></li>
+    <li><a href="schedule.html"><span class="nav-icon">📅</span><span class="nav-text">スケジュール</span></a></li>
     <li><a href="customers.html"><span class="nav-icon">🏠</span><span class="nav-text">顧客管理</span></a></li>
     <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+    <li><a href="analysis.html"><span class="nav-icon">📉</span><span class="nav-text">見積分析</span></a></li>
   </ul>
   <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
     <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
@@ -38,17 +41,6 @@
 
   <!-- 緊急アラート -->
   <div id="urgent-section"></div>
-
-  <!-- 期間フィルター -->
-  <div class="period-tabs">
-    <button class="period-tab" onclick="setPeriod('month',this)">今月</button>
-    <button class="period-tab" onclick="setPeriod('last_month',this)">先月</button>
-    <button class="period-tab" onclick="setPeriod('quarter',this)">今四半期</button>
-    <button class="period-tab active" onclick="setPeriod('all',this)">全期間</button>
-  </div>
-  <div id="no-data-notice" class="no-data-notice" style="display:none">
-    📭 この期間に該当するデータがありません。「全期間」タブで全データを確認できます。
-  </div>
 
   <!-- KPI Cards -->
   <div class="kpi-grid">
@@ -83,6 +75,9 @@
       </div>
     </div>
   </div>
+
+  <!-- 今日のアクション -->
+  <div id="today-actions-section"></div>
 
   <!-- Charts Row -->
   <div class="charts-grid">
@@ -213,25 +208,9 @@ function toggleUrgency(level, headerEl) {
   URGENCY_COLLAPSED[level] = !hidden;
 }
 
-let currentPeriod = 'all';
-
-function setPeriod(period, btn) {
-  currentPeriod = period;
-  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  loadDashboard();
-}
-
 async function loadDashboard() {
-  const res = await fetch(`/api/dashboard?period=${currentPeriod}`);
+  const res = await fetch('/api/dashboard');
   const d = await res.json();
-
-  const notice = document.getElementById('no-data-notice');
-  if (currentPeriod !== 'all' && d.kpi.contractedAmount === 0 && d.kpi.receivedAmount === 0) {
-    notice.style.display = 'block';
-  } else {
-    notice.style.display = 'none';
-  }
 
   document.getElementById('kpi-contracted').textContent = fmt(d.kpi.contractedAmount);
   document.getElementById('kpi-contracted-count').textContent = `全${d.kpi.projectCount}件中 契約済`;
@@ -245,6 +224,33 @@ async function loadDashboard() {
   renderWorkTypeChart(d.workTypeBreak);
   renderUnpaid(d.unpaidInvoices);
   renderPipeline(d.pipelineProj);
+  loadTodayActions();
+}
+
+async function loadTodayActions() {
+  const res = await fetch('/api/actions');
+  const actions = await res.json();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const pending = actions.filter(a => !a.is_done && a.due_date && a.due_date <= todayStr);
+  const sec = document.getElementById('today-actions-section');
+  if (!pending.length) { sec.innerHTML = ''; return; }
+  const rows = pending.map(a => {
+    const overdue = a.due_date < todayStr;
+    return `<div class="action-widget-item">
+      <span class="action-dot ${overdue?'overdue':'today'}"></span>
+      <span class="action-content">${a.content}</span>
+      ${a.project_name ? `<span class="action-proj">${a.project_name}</span>` : ''}
+      <span class="action-date ${overdue?'overdue':''}">${a.due_date}</span>
+      <a href="actions.html" style="margin-left:auto;font-size:11px;color:var(--primary)">→ 一覧</a>
+    </div>`;
+  }).join('');
+  sec.innerHTML = `<div class="action-widget">
+    <div class="action-widget-header">
+      <span>📋 今日のアクション・期限切れ</span>
+      <span class="action-badge">${pending.length}件</span>
+    </div>
+    ${rows}
+  </div>`;
 }
 
 function renderStatusChart(data) {

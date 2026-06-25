@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | アクションログ</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .summary-chip strong { color: var(--text); }
+    .summary-chip.chip-danger strong { color: #dc2626; }
+  </style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li><a href="assignment.html"><span class="nav-icon">🎯</span><span class="nav-text">担当管理</span></a></li>
+    <li class="active"><a href="actions.html"><span class="nav-icon">✅</span><span class="nav-text">アクションログ</span></a></li>
+    <li><a href="schedule.html"><span class="nav-icon">📅</span><span class="nav-text">スケジュール</span></a></li>
+    <li><a href="customers.html"><span class="nav-icon">🏠</span><span class="nav-text">顧客管理</span></a></li>
+    <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+    <li><a href="analysis.html"><span class="nav-icon">📉</span><span class="nav-text">見積分析</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>✅ アクションログ</h1>
+    <button class="btn btn-accent" onclick="openModal()">＋ アクション追加</button>
+  </div>
+
+  <div class="summary-row" id="summary-row"></div>
+
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;gap:8px">
+      <span>アクション一覧</span>
+      <div class="spacer" style="flex:1"></div>
+      <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" id="show-done" onchange="renderActions()"> 完了済みを表示
+      </label>
+    </div>
+    <div class="actions-list" id="actions-list">
+      <div class="empty-state">読込中…</div>
+    </div>
+  </div>
+</main>
+
+<!-- モーダル -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>アクション追加</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>アクション内容 <span style="color:#dc2626">*</span></label>
+          <textarea id="f-content" placeholder="例: 見積書を送付する、現地確認の日程を調整する" rows="3"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>案件選択</label>
+          <select id="f-project">
+            <option value="">-- 案件を選択（任意）--</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>期日</label>
+          <input type="date" id="f-due">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-accent" onclick="saveAction()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allActions = [];
+let allProjects = [];
+
+async function load() {
+  const [actRes, projRes] = await Promise.all([
+    fetch('/api/actions'),
+    fetch('/api/projects')
+  ]);
+  allActions = await actRes.json();
+  allProjects = await projRes.json();
+  renderSummary();
+  renderActions();
+  populateProjectSelect();
+}
+
+function renderSummary() {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const total = allActions.length;
+  const undone = allActions.filter(a => !a.is_done).length;
+  const overdue = allActions.filter(a => !a.is_done && a.due_date && a.due_date < todayStr).length;
+  const row = document.getElementById('summary-row');
+  row.innerHTML = `
+    <div class="summary-chip"><strong>${total}</strong> 件</div>
+    <div class="summary-chip"><strong>${undone}</strong> 未完了</div>
+    <div class="summary-chip ${overdue > 0 ? 'chip-danger' : ''}"><strong>${overdue}</strong> 期限切れ</div>
+  `;
+}
+
+function renderActions() {
+  const showDone = document.getElementById('show-done').checked;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const list = document.getElementById('actions-list');
+  let items = showDone ? allActions : allActions.filter(a => !a.is_done);
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">アクションがありません</div>';
+    return;
+  }
+  list.innerHTML = items.map(a => {
+    const overdue = !a.is_done && a.due_date && a.due_date < todayStr;
+    const today = !a.is_done && a.due_date && a.due_date === todayStr;
+    const doneCls = a.is_done ? 'done' : '';
+    const overdueCls = overdue ? 'overdue-card' : '';
+    const checkCls = a.is_done ? 'checked' : '';
+    const checkIcon = a.is_done ? '✓' : '';
+    const dueCls = overdue ? 'red' : '';
+    return `<div class="action-card ${doneCls} ${overdueCls}" id="card-${a.id}">
+      <div class="action-check ${checkCls}" onclick="toggleDone(${a.id}, ${a.is_done ? 0 : 1})">${checkIcon}</div>
+      <div class="action-body">
+        <div class="action-title">${a.content}</div>
+        <div class="action-meta">
+          ${a.project_name ? `<span class="action-proj-tag">${a.project_name}</span>` : ''}
+          ${a.customer_name ? `<span style="font-size:11px;color:var(--text-muted)">${a.customer_name}</span>` : ''}
+          ${a.due_date ? `<span class="action-due ${dueCls}">📅 ${a.due_date}${overdue ? ' (期限切れ)' : today ? ' (今日)' : ''}</span>` : ''}
+          <span style="font-size:10px;color:var(--text-muted)">${a.created_at ? a.created_at.substring(0,10) : ''} 作成</span>
+        </div>
+      </div>
+      <button class="action-del" onclick="deleteAction(${a.id})" title="削除">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function populateProjectSelect() {
+  const sel = document.getElementById('f-project');
+  allProjects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.name}（${p.customer_name || ''}）`;
+    opt.dataset.customer = p.customer_name || '';
+    opt.dataset.name = p.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function toggleDone(id, isDone) {
+  await fetch(`/api/actions/${id}/done`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_done: isDone })
+  });
+  allActions = allActions.map(a => a.id === id ? { ...a, is_done: isDone } : a);
+  renderSummary();
+  renderActions();
+}
+
+async function deleteAction(id) {
+  if (!confirm('このアクションを削除しますか？')) return;
+  await fetch(`/api/actions/${id}`, { method: 'DELETE' });
+  allActions = allActions.filter(a => a.id !== id);
+  renderSummary();
+  renderActions();
+}
+
+function openModal() {
+  document.getElementById('f-content').value = '';
+  document.getElementById('f-project').value = '';
+  document.getElementById('f-due').value = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function saveAction() {
+  const content = document.getElementById('f-content').value.trim();
+  if (!content) { alert('アクション内容を入力してください'); return; }
+  const sel = document.getElementById('f-project');
+  const projectId = sel.value ? Number(sel.value) : null;
+  const selectedOpt = sel.options[sel.selectedIndex];
+  const projectName = projectId ? (selectedOpt.dataset.name || '') : '';
+  const customerName = projectId ? (selectedOpt.dataset.customer || '') : '';
+  const dueDate = document.getElementById('f-due').value || null;
+
+  const res = await fetch('/api/actions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, project_id: projectId, project_name: projectName, customer_name: customerName, due_date: dueDate })
+  });
+  const { id } = await res.json();
+  allActions.unshift({ id, content, project_id: projectId, project_name: projectName, customer_name: customerName, due_date: dueDate, is_done: 0, created_at: new Date().toLocaleString('ja-JP') });
+  renderSummary();
+  renderActions();
+  closeModal();
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+load();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | 工事スケジュール</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li><a href="assignment.html"><span class="nav-icon">🎯</span><span class="nav-text">担当管理</span></a></li>
+    <li><a href="actions.html"><span class="nav-icon">✅</span><span class="nav-text">アクションログ</span></a></li>
+    <li class="active"><a href="schedule.html"><span class="nav-icon">📅</span><span class="nav-text">スケジュール</span></a></li>
+    <li><a href="customers.html"><span class="nav-icon">🏠</span><span class="nav-text">顧客管理</span></a></li>
+    <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+    <li><a href="analysis.html"><span class="nav-icon">📉</span><span class="nav-text">見積分析</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>📅 工事スケジュール</h1>
+    <span class="date-badge" id="today-date"></span>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-body">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="changeMonth(-1)">◀ 前月</button>
+        <div class="cal-month" id="cal-month-label"></div>
+        <button class="cal-nav-btn" onclick="changeMonth(1)">翌月 ▶</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-legend" id="cal-legend"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const STATUS_COLOR = {
+  '初回訪問済': '#7c3aed',
+  '現地調査済': '#15803d',
+  '見積提出済': '#d97706',
+  '商談中':    '#d64d6e',
+  '契約済':    '#1565c0',
+};
+
+const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+
+let currentYear, currentMonth, allProjects = [];
+
+function init() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth();
+  document.getElementById('today-date').textContent =
+    now.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+  loadProjects();
+}
+
+async function loadProjects() {
+  const res = await fetch('/api/projects');
+  allProjects = await res.json();
+  renderCalendar();
+  renderLegend();
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0)  { currentMonth = 11; currentYear--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const label = document.getElementById('cal-month-label');
+  label.textContent = `${currentYear}年${currentMonth + 1}月`;
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  // 曜日ヘッダー
+  DOW_LABELS.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'cal-dow';
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const lastDate = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // 前月の空白
+  for (let i = 0; i < firstDay; i++) {
+    const prev = new Date(currentYear, currentMonth, 0 - (firstDay - i - 1));
+    const cell = makeCell(prev.getDate(), true, false, []);
+    grid.appendChild(cell);
+  }
+
+  // 当月の日付
+  for (let d = 1; d <= lastDate; d++) {
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = dateStr === todayStr;
+    const events = allProjects.filter(p => p.planned_start_date === dateStr);
+    const cell = makeCell(d, false, isToday, events);
+    grid.appendChild(cell);
+  }
+
+  // 次月の空白（6行分に満たす場合）
+  const totalCells = firstDay + lastDate;
+  const remainder = totalCells % 7;
+  if (remainder !== 0) {
+    for (let i = 1; i <= 7 - remainder; i++) {
+      const cell = makeCell(i, true, false, []);
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function makeCell(day, otherMonth, isToday, events) {
+  const cell = document.createElement('div');
+  cell.className = `cal-cell${otherMonth ? ' other-month' : ''}${isToday ? ' today' : ''}`;
+
+  const dayEl = document.createElement('div');
+  dayEl.className = 'cal-day';
+  dayEl.textContent = day;
+  cell.appendChild(dayEl);
+
+  events.forEach(p => {
+    const ev = document.createElement('div');
+    ev.className = 'cal-event';
+    ev.style.background = STATUS_COLOR[p.status] || '#94a3b8';
+    ev.textContent = p.name;
+    ev.title = `${p.name}（${p.customer_name || ''}）${p.status}`;
+    cell.appendChild(ev);
+  });
+
+  return cell;
+}
+
+function renderLegend() {
+  const legend = document.getElementById('cal-legend');
+  legend.innerHTML = Object.entries(STATUS_COLOR).map(([label, color]) =>
+    `<div class="cal-legend-item">
+      <div class="cal-legend-dot" style="background:${color}"></div>
+      <span>${label}</span>
+    </div>`
+  ).join('');
+}
+
+init();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

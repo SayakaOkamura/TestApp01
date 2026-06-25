@@ -96,6 +96,16 @@ function initDB() {
       duration TEXT,
       notes TEXT
     );
+    CREATE TABLE IF NOT EXISTS project_actions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER,
+      project_name TEXT DEFAULT '',
+      customer_name TEXT DEFAULT '',
+      content TEXT NOT NULL,
+      due_date TEXT,
+      is_done INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
   `);
 
   const count = database.prepare('SELECT COUNT(*) AS c FROM projects').get();

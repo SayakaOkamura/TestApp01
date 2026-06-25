@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | 見積ズレ分析</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li><a href="assignment.html"><span class="nav-icon">🎯</span><span class="nav-text">担当管理</span></a></li>
+    <li><a href="actions.html"><span class="nav-icon">✅</span><span class="nav-text">アクションログ</span></a></li>
+    <li><a href="schedule.html"><span class="nav-icon">📅</span><span class="nav-text">スケジュール</span></a></li>
+    <li><a href="customers.html"><span class="nav-icon">🏠</span><span class="nav-text">顧客管理</span></a></li>
+    <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+    <li class="active"><a href="analysis.html"><span class="nav-icon">📉</span><span class="nav-text">見積分析</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>📉 見積ズレ分析</h1>
+    <span class="date-badge" id="today-date"></span>
+  </div>
+
+  <!-- サマリーカード -->
+  <div class="analysis-summary" id="analysis-summary">
+    <div class="analysis-card"><div class="analysis-label">分析対象件数</div><div class="analysis-value" id="sum-count">-</div><div class="analysis-sub">契約済・概算・契約額あり</div></div>
+    <div class="analysis-card"><div class="analysis-label">平均乖離率</div><div class="analysis-value" id="sum-avg-gap">-</div><div class="analysis-sub">（契約額 / 概算額 - 1）</div></div>
+    <div class="analysis-card gap-positive"><div class="analysis-label">過大見積件数</div><div class="analysis-value" id="sum-over">-</div><div class="analysis-sub">契約額 ＜ 概算額</div></div>
+    <div class="analysis-card gap-negative"><div class="analysis-label">過小見積件数</div><div class="analysis-value" id="sum-under">-</div><div class="analysis-sub">契約額 ＞ 概算額</div></div>
+  </div>
+
+  <!-- 工事種別別棒グラフ -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">工事種別別　概算 vs 契約額（平均）</div>
+    <div class="card-body">
+      <div class="chart-container" style="height:280px">
+        <canvas id="workTypeChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 案件別詳細テーブル -->
+  <div class="card">
+    <div class="card-header">案件別詳細</div>
+    <div class="card-body no-pad" style="overflow-x:auto">
+      <table class="data-table" id="detail-table">
+        <thead>
+          <tr>
+            <th>案件名</th>
+            <th>顧客名</th>
+            <th>工事種別</th>
+            <th>担当</th>
+            <th style="text-align:right">概算金額</th>
+            <th style="text-align:right">契約金額</th>
+            <th style="text-align:right">差額</th>
+            <th style="text-align:right">乖離率</th>
+          </tr>
+        </thead>
+        <tbody id="detail-body">
+          <tr><td colspan="8" class="empty-state">読込中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const fmt = v => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }).format(v);
+const fmtPct = v => v == null ? '-' : `${v > 0 ? '+' : ''}${v}%`;
+
+async function load() {
+  document.getElementById('today-date').textContent =
+    new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+  const res = await fetch('/api/analysis/estimate-gap');
+  const { projects, byWorkType } = await res.json();
+
+  renderSummary(projects);
+  renderChart(byWorkType);
+  renderTable(projects);
+}
+
+function renderSummary(projects) {
+  const count = projects.length;
+  const avgGap = count > 0
+    ? (projects.reduce((s, p) => s + (p.gap_pct || 0), 0) / count).toFixed(1)
+    : null;
+  const over = projects.filter(p => p.gap < 0).length;
+  const under = projects.filter(p => p.gap > 0).length;
+
+  document.getElementById('sum-count').textContent = count + '件';
+  document.getElementById('sum-avg-gap').textContent = avgGap != null ? fmtPct(Number(avgGap)) : '-';
+  document.getElementById('sum-over').textContent = over + '件';
+  document.getElementById('sum-under').textContent = under + '件';
+}
+
+function renderChart(byWorkType) {
+  const labels = byWorkType.map(x => x.work_type);
+  const estData = byWorkType.map(x => x.avg_est);
+  const conData = byWorkType.map(x => x.avg_con);
+
+  new Chart(document.getElementById('workTypeChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '概算金額（平均）', data: estData, backgroundColor: '#93c5fd', borderRadius: 4 },
+        { label: '契約金額（平均）', data: conData, backgroundColor: '#1565c0', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        y: { ticks: { callback: v => (v / 10000) + '万' }, grid: { color: '#f0f0f0' } }
+      }
+    }
+  });
+}
+
+function renderTable(projects) {
+  const tbody = document.getElementById('detail-body');
+  if (!projects.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">データがありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = projects.map(p => {
+    const absGap = Math.abs(p.gap_pct || 0);
+    const rowCls = absGap > 20 ? (p.gap < 0 ? 'gap-high' : 'gap-low') : '';
+    const gapColor = p.gap > 0 ? '#15803d' : p.gap < 0 ? '#dc2626' : '';
+    return `<tr class="${rowCls}">
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</td>
+      <td>${p.customer_name || '-'}</td>
+      <td>${p.work_type || '-'}</td>
+      <td>${p.staff || '-'}</td>
+      <td class="amount">${fmt(p.estimated_amount)}</td>
+      <td class="amount">${fmt(p.contract_amount)}</td>
+      <td class="amount" style="color:${gapColor}">${p.gap >= 0 ? '+' : ''}${fmt(p.gap)}</td>
+      <td class="amount" style="color:${gapColor}">${fmtPct(p.gap_pct)}</td>
+    </tr>`;
+  }).join('');
+}
+
+load();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

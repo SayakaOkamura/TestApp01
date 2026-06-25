@@ -8,7 +8,7 @@ Excel データを SQLite に取り込み、ブラウザから案件・顧客・
 ## フォルダ構成
 
 <!-- TREE:START -->
-> 最終更新: 2026/6/25 16:36:53
+> 最終更新: 2026/6/25 17:15:40
 ```
 TestApp01/
 ├── 📂 .claude/  ← Claude Codeエージェント・フック設定
@@ -31,12 +31,15 @@ TestApp01/
 │   ├── 社員名簿.xlsx
 │   └── 請求・入金管理表.xlsx
 ├── 📂 public/  ← フロントエンド（HTML・CSS・JS）
+│   ├── actions.html
+│   ├── analysis.html
 │   ├── app.js  ← 共通UIスクリプト（カード折りたたみ等）
 │   ├── assignment.html  ← 担当管理
 │   ├── customers.html  ← 顧客管理
 │   ├── index.html  ← ダッシュボード
 │   ├── invoices.html  ← 請求・入金管理
 │   ├── projects.html  ← 案件管理
+│   ├── schedule.html
 │   └── style.css  ← 共通スタイルシート
 ├── 📂 routes/  ← バックエンドAPI
 │   └── api.js  ← REST APIエンドポイント定義

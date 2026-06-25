@@ -5,45 +5,18 @@ const { getDB } = require('../db/init');
 // ダッシュボード集計
 router.get('/dashboard', (req, res) => {
   const db = getDB();
-  const { period } = req.query;
-
-  // 期間フィルターの日付範囲を計算
-  const now = new Date();
-  let dateFrom = null, dateTo = null;
-  if (period === 'month') {
-    dateFrom = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  } else if (period === 'last_month') {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    dateFrom = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-    dateTo   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  } else if (period === 'quarter') {
-    const qStart = Math.floor(now.getMonth() / 3) * 3;
-    dateFrom = `${now.getFullYear()}-${String(qStart+1).padStart(2,'0')}-01`;
-  }
-
-  const pFilter = dateFrom
-    ? (dateTo ? ` AND contract_date >= '${dateFrom}' AND contract_date < '${dateTo}'`
-               : ` AND contract_date >= '${dateFrom}'`)
-    : '';
-  const iFilter = dateFrom
-    ? (dateTo ? ` AND payment_date >= '${dateFrom}' AND payment_date < '${dateTo}'`
-               : ` AND payment_date >= '${dateFrom}'`)
-    : '';
-
-  const contractedAmount = db.prepare(`SELECT COALESCE(SUM(contract_amount),0) as v FROM projects WHERE status='契約済'${pFilter}`).get().v;
-  const receivedAmount   = db.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM invoices WHERE payment_status='入金済'${iFilter}`).get().v;
+  const contractedAmount = db.prepare(`SELECT COALESCE(SUM(contract_amount),0) as v FROM projects WHERE status='契約済'`).get().v;
+  const receivedAmount   = db.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM invoices WHERE payment_status='入金済'`).get().v;
   const unpaidAmount     = db.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM invoices WHERE payment_status='未入金'`).get().v;
   const pipelineAmount   = db.prepare(`SELECT COALESCE(SUM(estimated_amount),0) as v FROM projects WHERE status NOT IN ('契約済','失注')`).get().v;
   const projectCount     = db.prepare(`SELECT COUNT(*) as v FROM projects`).get().v;
   const activeCount      = db.prepare(`SELECT COUNT(*) as v FROM projects WHERE status NOT IN ('契約済','失注')`).get().v;
-
   const statusDist      = db.prepare(`SELECT status, COUNT(*) as count, COALESCE(SUM(CASE WHEN contract_amount>0 THEN contract_amount ELSE estimated_amount END),0) as amount FROM projects GROUP BY status ORDER BY count DESC`).all();
   const workTypeBreak   = db.prepare(`SELECT work_type, COALESCE(SUM(contract_amount),0) as total FROM projects WHERE status='契約済' GROUP BY work_type ORDER BY total DESC`).all();
   const staffPerf       = db.prepare(`SELECT staff, COUNT(*) as count, COALESCE(SUM(contract_amount),0) as total FROM projects WHERE status='契約済' AND staff!='' GROUP BY staff ORDER BY total DESC`).all();
   const unpaidInvoices  = db.prepare(`SELECT * FROM invoices WHERE payment_status='未入金' ORDER BY due_date ASC`).all();
   const pipelineProj    = db.prepare(`SELECT * FROM projects WHERE status NOT IN ('契約済','失注') ORDER BY probability DESC, estimated_amount DESC LIMIT 10`).all();
   const recentContracts = db.prepare(`SELECT * FROM projects WHERE status='契約済' ORDER BY contract_date DESC LIMIT 5`).all();
-
   res.json({
     kpi: { contractedAmount, receivedAmount, unpaidAmount, pipelineAmount, projectCount, activeCount },
     statusDist, workTypeBreak, staffPerf, unpaidInvoices, pipelineProj, recentContracts
@@ -241,6 +214,52 @@ router.get('/quotes', (req, res) => {
   if (customer_name) { sql += ' WHERE customer_name=?'; params.push(customer_name); }
   sql += ' ORDER BY quote_number';
   res.json(getDB().prepare(sql).all(...params));
+});
+
+// ---- アクションログ ----
+router.get('/actions', (req, res) => {
+  res.json(getDB().prepare(`SELECT * FROM project_actions ORDER BY is_done ASC, CASE WHEN due_date IS NULL OR due_date='' THEN 1 ELSE 0 END, due_date ASC, id DESC`).all());
+});
+router.post('/actions', (req, res) => {
+  const f = req.body;
+  const r = getDB().prepare(`INSERT INTO project_actions (project_id,project_name,customer_name,content,due_date) VALUES (?,?,?,?,?)`).run(
+    f.project_id||null, f.project_name||'', f.customer_name||'', f.content, f.due_date||null
+  );
+  res.json({ id: r.lastInsertRowid });
+});
+router.patch('/actions/:id/done', (req, res) => {
+  getDB().prepare('UPDATE project_actions SET is_done=? WHERE id=?').run(req.body.is_done ? 1 : 0, req.params.id);
+  res.json({ success: true });
+});
+router.delete('/actions/:id', (req, res) => {
+  getDB().prepare('DELETE FROM project_actions WHERE id=?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ---- 見積ズレ分析 ----
+router.get('/analysis/estimate-gap', (req, res) => {
+  const db = getDB();
+  const projects = db.prepare(`
+    SELECT id, name, customer_name, work_type, staff,
+      estimated_amount, contract_amount,
+      (contract_amount - estimated_amount) AS gap,
+      CASE WHEN estimated_amount > 0
+        THEN ROUND((contract_amount * 100.0 / estimated_amount) - 100, 1)
+        ELSE NULL END AS gap_pct
+    FROM projects
+    WHERE status='契約済' AND estimated_amount > 0 AND contract_amount > 0
+    ORDER BY ABS(contract_amount - estimated_amount) DESC
+  `).all();
+  const byWorkType = db.prepare(`
+    SELECT work_type, COUNT(*) AS cnt,
+      ROUND(AVG(estimated_amount)) AS avg_est,
+      ROUND(AVG(contract_amount)) AS avg_con,
+      ROUND(AVG(CASE WHEN estimated_amount>0 THEN (contract_amount*100.0/estimated_amount)-100 ELSE NULL END),1) AS avg_gap_pct
+    FROM projects
+    WHERE status='契約済' AND estimated_amount>0 AND contract_amount>0
+    GROUP BY work_type ORDER BY cnt DESC
+  `).all();
+  res.json({ projects, byWorkType });
 });
 
 module.exports = router;
