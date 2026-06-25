@@ -461,3 +461,9 @@ tr.row-warning:hover  { background: #fff3d0 !important; }
 }
 .period-tab:hover { border-color: var(--primary); color: var(--primary); }
 .period-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.no-data-notice {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 16px; padding: 10px 16px;
+  background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px;
+  font-size: 13px; color: #92400e;
+}
