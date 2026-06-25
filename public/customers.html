@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | 顧客管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li><a href="assignment.html"><span class="nav-icon">👤</span><span class="nav-text">担当管理</span></a></li>
+    <li class="active"><a href="customers.html"><span class="nav-icon">👥</span><span class="nav-text">顧客管理</span></a></li>
+    <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>👥 顧客管理</h1>
+    <button class="btn btn-accent" onclick="openModal()">＋ 新規顧客</button>
+  </div>
+
+  <div class="summary-row" id="summary-row"></div>
+
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>顧客台帳</span>
+      <div class="spacer"></div>
+      <select class="filter-select" id="filter-building" onchange="applyFilter()">
+        <option value="">全建物種別</option>
+        <option>一戸建て</option><option>マンション</option>
+      </select>
+      <select class="filter-select" id="filter-source" onchange="applyFilter()">
+        <option value="">全来店経路</option>
+        <option>チラシ</option><option>WEB検索</option><option>紹介（山本様）</option>
+        <option>SNS広告</option><option>展示場来場</option>
+      </select>
+      <input class="search-box" id="search" placeholder="🔍 氏名・住所で検索" oninput="applyFilter()">
+    </div>
+    <div class="card-body no-pad">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>氏名</th><th>住所</th><th>建物種別</th><th style="text-align:center">築年数</th>
+            <th>来店経路</th><th>担当者</th><th>電話番号</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="customers-tbody"><tr><td colspan="8" class="empty-state">読込中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">新規顧客登録</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-grid">
+        <div class="form-group"><label>氏名 *</label><input id="f-name" required></div>
+        <div class="form-group"><label>電話番号</label><input id="f-phone"></div>
+        <div class="form-group full"><label>住所</label><input id="f-address"></div>
+        <div class="form-group"><label>建物種別</label>
+          <select id="f-building-type">
+            <option value="">選択</option><option>一戸建て</option><option>マンション</option>
+          </select>
+        </div>
+        <div class="form-group"><label>築年数</label><input id="f-age" type="number" min="0" value="0"></div>
+        <div class="form-group"><label>メールアドレス</label><input id="f-email" type="email"></div>
+        <div class="form-group"><label>来店経路</label>
+          <select id="f-source">
+            <option value="">選択</option>
+            <option>チラシ</option><option>WEB検索</option><option>紹介（山本様）</option>
+            <option>SNS広告</option><option>展示場来場</option>
+          </select>
+        </div>
+        <div class="form-group"><label>担当者</label>
+          <select id="f-staff">
+            <option value="">選択</option>
+            <option>佐々木</option><option>中島</option><option>田村</option>
+            <option>山口</option><option>加藤</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>備考</label><textarea id="f-notes"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-accent" onclick="saveCustomer()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allCustomers = [];
+
+async function loadCustomers() {
+  const res = await fetch('/api/customers');
+  allCustomers = await res.json();
+  renderSummary();
+  applyFilter();
+}
+
+function renderSummary() {
+  const detached = allCustomers.filter(c => c.building_type === '一戸建て').length;
+  const mansion = allCustomers.filter(c => c.building_type === 'マンション').length;
+  document.getElementById('summary-row').innerHTML = `
+    <div class="summary-chip">全 <strong>${allCustomers.length}</strong> 件</div>
+    <div class="summary-chip">一戸建て <strong>${detached}</strong> 件</div>
+    <div class="summary-chip">マンション <strong>${mansion}</strong> 件</div>
+  `;
+}
+
+function applyFilter() {
+  const building = document.getElementById('filter-building').value;
+  const source = document.getElementById('filter-source').value;
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = allCustomers.filter(c =>
+    (!building || c.building_type === building) &&
+    (!source || (c.source||'').includes(source.replace(/（.*）/,''))) &&
+    (!q || (c.name||'').toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q))
+  );
+  renderTable(filtered);
+}
+
+function renderTable(customers) {
+  const tbody = document.getElementById('customers-tbody');
+  if (!customers.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">該当する顧客がいません</td></tr>'; return; }
+  tbody.innerHTML = customers.map(c => `<tr>
+    <td style="font-weight:600">${c.name}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${c.address||'-'}</td>
+    <td>${c.building_type||'-'}</td>
+    <td class="center">${c.building_age ? c.building_age+'年' : '-'}</td>
+    <td style="font-size:12px">${c.source||'-'}</td>
+    <td>${c.staff||'-'}</td>
+    <td style="font-size:12px">${c.phone||'-'}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-outline btn-sm" onclick="editCustomer(${c.id})">編集</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id}, '${(c.name||'').replace(/'/g,"\\'")}')">削除</button>
+    </td>
+  </tr>`).join('');
+}
+
+function openModal(customer) {
+  document.getElementById('modal-title').textContent = customer ? '顧客編集' : '新規顧客登録';
+  if (customer) {
+    document.getElementById('edit-id').value = customer.id;
+    document.getElementById('f-name').value = customer.name||'';
+    document.getElementById('f-phone').value = customer.phone||'';
+    document.getElementById('f-address').value = customer.address||'';
+    document.getElementById('f-building-type').value = customer.building_type||'';
+    document.getElementById('f-age').value = customer.building_age||0;
+    document.getElementById('f-email').value = customer.email||'';
+    document.getElementById('f-source').value = customer.source||'';
+    document.getElementById('f-staff').value = customer.staff||'';
+    document.getElementById('f-notes').value = customer.notes||'';
+  } else {
+    document.getElementById('edit-id').value = '';
+    ['f-name','f-phone','f-address','f-email','f-notes'].forEach(id => document.getElementById(id).value='');
+    document.getElementById('f-building-type').value = '';
+    document.getElementById('f-age').value = 0;
+    document.getElementById('f-source').value = '';
+    document.getElementById('f-staff').value = '';
+  }
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+function editCustomer(id) { openModal(allCustomers.find(c => c.id === id)); }
+
+async function saveCustomer() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { showToast('氏名を入力してください'); return; }
+  const id = document.getElementById('edit-id').value;
+  const body = {
+    name,
+    phone: document.getElementById('f-phone').value,
+    address: document.getElementById('f-address').value,
+    building_type: document.getElementById('f-building-type').value,
+    building_age: document.getElementById('f-age').value,
+    email: document.getElementById('f-email').value,
+    source: document.getElementById('f-source').value,
+    staff: document.getElementById('f-staff').value,
+    notes: document.getElementById('f-notes').value,
+  };
+  await fetch(id ? `/api/customers/${id}` : '/api/customers', {
+    method: id ? 'PUT' : 'POST',
+    headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  closeModal();
+  showToast(id ? '顧客情報を更新しました' : '顧客を登録しました');
+  loadCustomers();
+}
+
+async function deleteCustomer(id, name) {
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+  showToast('顧客を削除しました');
+  loadCustomers();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+loadCustomers();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

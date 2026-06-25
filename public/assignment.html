@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | 担当管理</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ===== スタッフカード ===== */
+    .staff-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .staff-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 16px 14px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color .15s, box-shadow .15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .staff-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+    .staff-card.selected { border-color: var(--primary); }
+    .staff-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    }
+    .staff-card.load-0::before { background: #22c55e; }
+    .staff-card.load-1::before { background: #3b82f6; }
+    .staff-card.load-2::before { background: #f59e0b; }
+    .staff-card.load-3::before { background: #ef4444; }
+
+    .staff-name { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .staff-role { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; }
+
+    .staff-count-row { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
+    .staff-count-num { font-size: 36px; font-weight: 700; line-height: 1; }
+    .load-0 .staff-count-num { color: #16a34a; }
+    .load-1 .staff-count-num { color: #1d4ed8; }
+    .load-2 .staff-count-num { color: #d97706; }
+    .load-3 .staff-count-num { color: #dc2626; }
+    .staff-count-label { font-size: 12px; color: var(--text-muted); padding-bottom: 4px; }
+
+    .load-bar-bg {
+      height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 8px;
+    }
+    .load-bar-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+    .load-0 .load-bar-fill { background: #22c55e; }
+    .load-1 .load-bar-fill { background: #3b82f6; }
+    .load-2 .load-bar-fill { background: #f59e0b; }
+    .load-3 .load-bar-fill { background: #ef4444; }
+
+    .load-label {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .load-0 .load-label { background: #dcfce7; color: #16a34a; }
+    .load-1 .load-label { background: #dbeafe; color: #1d4ed8; }
+    .load-2 .load-label { background: #fef3c7; color: #d97706; }
+    .load-3 .load-label { background: #fee2e2; color: #dc2626; }
+
+    .staff-projects-mini {
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+      font-size: 11px; color: var(--text-muted); line-height: 1.8;
+      max-height: 80px; overflow-y: auto;
+    }
+    .staff-projects-mini .mini-item {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .staff-projects-mini .mini-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      margin-right: 5px; vertical-align: middle;
+    }
+
+    /* ===== 割り当てテーブル ===== */
+    .filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab-btn {
+      padding: 6px 14px; border-radius: 20px; font-size: 13px;
+      font-weight: 600; border: 1.5px solid var(--border);
+      background: var(--card); color: var(--text-muted); cursor: pointer;
+      transition: all .15s;
+    }
+    .tab-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .staff-select {
+      padding: 6px 8px; border: 1.5px solid var(--border);
+      border-radius: 6px; font-size: 13px; background: #fff;
+      cursor: pointer; min-width: 90px; outline: none;
+      transition: border-color .15s;
+    }
+    .staff-select:focus { border-color: var(--primary); }
+    .staff-select.saving { opacity: .5; }
+    .staff-select.saved { border-color: var(--success); }
+
+    .unassigned-badge { color: var(--danger); font-size: 12px; font-style: italic; }
+
+    .assigned-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f0f4ff; border: 1px solid #c7d7ff;
+      padding: 3px 10px; border-radius: 12px; font-size: 12px;
+      color: var(--primary); font-weight: 600;
+    }
+
+    .status-select {
+      padding: 5px 8px; border: 1.5px solid var(--border);
+      border-radius: 6px; font-size: 12px; font-weight: 600;
+      background: #fff; cursor: pointer; min-width: 100px; outline: none;
+      transition: border-color .15s, color .15s;
+    }
+    .status-select:focus { border-color: var(--primary); }
+    .status-select.saving { opacity: .5; }
+    .status-select.saved { border-color: var(--success); }
+
+    .section-note {
+      font-size: 12px; color: var(--text-muted); margin-left: auto;
+      display: flex; align-items: center; gap: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li class="active"><a href="assignment.html"><span class="nav-icon">👤</span><span class="nav-text">担当管理</span></a></li>
+    <li><a href="customers.html"><span class="nav-icon">👥</span><span class="nav-text">顧客管理</span></a></li>
+    <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>👤 担当管理</h1>
+    <span class="date-badge" id="today-date"></span>
+  </div>
+
+  <!-- スタッフ稼働カード -->
+  <div id="staff-grid" class="staff-grid">
+    <!-- JS で描画 -->
+  </div>
+
+  <!-- 案件割り当てテーブル -->
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span>案件担当割り当て</span>
+      <div class="filter-tabs" id="filter-tabs">
+        <button class="tab-btn active" data-filter="active" onclick="setFilter('active',this)">進行中</button>
+        <button class="tab-btn" data-filter="all" onclick="setFilter('all',this)">全案件</button>
+      </div>
+      <span class="section-note">💡 担当者欄のドロップダウンを変えると即座に保存されます</span>
+    </div>
+    <div class="card-body no-pad">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>案件名</th>
+            <th>顧客名</th>
+            <th>工事種別</th>
+            <th style="min-width:115px">ステータス</th>
+            <th style="text-align:right">金額</th>
+            <th style="min-width:130px">担当者</th>
+          </tr>
+        </thead>
+        <tbody id="assign-tbody">
+          <tr><td colspan="6" class="empty-state">読込中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const fmt = v => new Intl.NumberFormat('ja-JP', { style:'currency', currency:'JPY', maximumFractionDigits:0 }).format(v||0);
+const STATUS_MAP = { '契約済':'contracted','商談中':'negotiating','見積提出済':'quoted','現地調査済':'visited','初回訪問済':'surveyed','失注':'lost' };
+const STATUS_DOT = { '商談中':'#d64d6e','見積提出済':'#d97706','現地調査済':'#15803d','初回訪問済':'#7c3aed','契約済':'#1565c0' };
+const STATUS_COLOR = { '契約済':'#1565c0','商談中':'#d64d6e','見積提出済':'#d97706','現地調査済':'#15803d','初回訪問済':'#7c3aed','失注':'#94a3b8' };
+const STATUS_OPTIONS = ['初回訪問済','現地調査済','見積提出済','商談中','契約済','失注'];
+
+function applyStatusSelectStyle(sel) {
+  const color = STATUS_COLOR[sel.value] || '#94a3b8';
+  sel.style.borderColor = color;
+  sel.style.color = color;
+}
+
+let allWorkload = [];
+let allProjects = [];
+let currentFilter = 'active';
+let staffFilter = null;  // null = 全員
+let salesStaffNames = [];
+
+async function loadAll() {
+  const [wRes, pRes] = await Promise.all([fetch('/api/staff/workload'), fetch('/api/projects')]);
+  allWorkload = await wRes.json();
+  allProjects = await pRes.json();
+  salesStaffNames = allWorkload.map(s => s.name);
+  renderStaffCards();
+  applyFilters();
+}
+
+// ===== スタッフカード =====
+function loadLevel(count) {
+  if (count === 0) return 0;
+  if (count <= 2) return 1;
+  if (count <= 4) return 2;
+  return 3;
+}
+const LOAD_LABELS = ['空き', '適正', '多め', '要注意'];
+const MAX_LOAD = 6;
+
+function renderStaffCards() {
+  const grid = document.getElementById('staff-grid');
+  grid.innerHTML = allWorkload.map(s => {
+    const level = loadLevel(s.active_count);
+    const pct = Math.min(100, Math.round((s.active_count / MAX_LOAD) * 100));
+    const miniItems = s.projects.filter(p => p.status !== '契約済').slice(0, 5)
+      .map(p => `<div class="mini-item"><span class="mini-dot" style="background:${STATUS_DOT[p.status]||'#ccc'}"></span>${p.name}</div>`).join('');
+    const noActive = s.active_count === 0 ? '<div class="mini-item" style="color:#22c55e">進行中の案件なし</div>' : '';
+    return `
+      <div class="staff-card load-${level}" id="card-${s.name}" onclick="filterByStaff('${s.name}')">
+        <div class="staff-name">${s.name}</div>
+        <div class="staff-role">${s.position || '担当'}</div>
+        <div class="staff-count-row">
+          <div class="staff-count-num">${s.active_count}</div>
+          <div class="staff-count-label">件 進行中<br><span style="font-size:10px;color:#94a3b8">契約済 ${s.contracted_count}件</span></div>
+        </div>
+        <div class="load-bar-bg">
+          <div class="load-bar-fill" style="width:${pct}%"></div>
+        </div>
+        <span class="load-label">${LOAD_LABELS[level]}</span>
+        <div class="staff-projects-mini">${noActive}${miniItems}</div>
+      </div>`;
+  }).join('');
+}
+
+// ===== フィルター =====
+function setFilter(type, el) {
+  currentFilter = type;
+  document.querySelectorAll('.tab-btn[data-filter]').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+}
+
+function filterByStaff(name) {
+  if (staffFilter === name) {
+    staffFilter = null;
+    document.querySelectorAll('.staff-card').forEach(c => c.classList.remove('selected'));
+  } else {
+    staffFilter = name;
+    document.querySelectorAll('.staff-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('card-' + name).classList.add('selected');
+  }
+  applyFilters();
+}
+
+function applyFilters() {
+  let list = [...allProjects].filter(p => p.status !== '失注');
+  if (currentFilter === 'active') list = list.filter(p => p.status !== '契約済');
+  if (staffFilter) list = list.filter(p => p.staff === staffFilter);
+  // 未割り当てを先頭に
+  list.sort((a, b) => {
+    if (!a.staff && b.staff) return -1;
+    if (a.staff && !b.staff) return 1;
+    return 0;
+  });
+  renderTable(list);
+}
+
+// ===== 割り当てテーブル =====
+function renderTable(projects) {
+  const tbody = document.getElementById('assign-tbody');
+  if (!projects.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">該当する案件がありません</td></tr>';
+    return;
+  }
+
+  const opts = salesStaffNames.map(n => `<option value="${n}">${n}</option>`).join('');
+
+  tbody.innerHTML = projects.map(p => {
+    const amount = p.status === '契約済' ? fmt(p.contract_amount) : fmt(p.estimated_amount);
+    const staffCell = `
+      <select class="staff-select" id="sel-${p.id}"
+        onchange="assignStaff(${p.id}, this)"
+        title="担当者を選択して即保存">
+        <option value="">── 未割り当て ──</option>
+        ${salesStaffNames.map(n => `<option value="${n}"${p.staff===n?' selected':''}>${n}</option>`).join('')}
+      </select>`;
+    const statusCell = `
+      <select class="status-select" id="ssel-${p.id}"
+        onchange="changeStatus(${p.id}, this)"
+        title="ステータスを変更して即保存">
+        ${STATUS_OPTIONS.map(s => `<option value="${s}"${p.status===s?' selected':''}>${s}</option>`).join('')}
+      </select>`;
+    return `<tr id="row-${p.id}">
+      <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</td>
+      <td>${p.customer_name||'-'}</td>
+      <td>${p.work_type||'-'}</td>
+      <td>${statusCell}</td>
+      <td class="amount">${amount}</td>
+      <td>${staffCell}</td>
+    </tr>`;
+  }).join('');
+
+  // ステータス選択肢に色を適用
+  document.querySelectorAll('.status-select').forEach(applyStatusSelectStyle);
+}
+
+// ===== 担当者を変更して即保存 =====
+async function assignStaff(projectId, selectEl) {
+  const newStaff = selectEl.value;
+  selectEl.classList.add('saving');
+  selectEl.disabled = true;
+
+  await fetch(`/api/projects/${projectId}/staff`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ staff: newStaff })
+  });
+
+  // ローカルデータを更新
+  const proj = allProjects.find(p => p.id === projectId);
+  if (proj) proj.staff = newStaff;
+
+  selectEl.disabled = false;
+  selectEl.classList.remove('saving');
+  selectEl.classList.add('saved');
+  setTimeout(() => selectEl.classList.remove('saved'), 1200);
+
+  // スタッフカードを再描画（稼働数を再取得）
+  const wRes = await fetch('/api/staff/workload');
+  allWorkload = await wRes.json();
+  renderStaffCards();
+
+  showToast(newStaff ? `「${proj?.name}」→ ${newStaff} に割り当てました` : `「${proj?.name}」の担当者を解除しました`);
+}
+
+// ===== ステータスを変更して即保存 =====
+async function changeStatus(projectId, selectEl) {
+  const newStatus = selectEl.value;
+  selectEl.classList.add('saving');
+  selectEl.disabled = true;
+
+  await fetch(`/api/projects/${projectId}/status`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ status: newStatus })
+  });
+
+  const proj = allProjects.find(p => p.id === projectId);
+  if (proj) proj.status = newStatus;
+
+  selectEl.disabled = false;
+  selectEl.classList.remove('saving');
+  selectEl.classList.add('saved');
+  applyStatusSelectStyle(selectEl);
+
+  // スタッフカードを再描画（稼働数が変わりうる）
+  const wRes = await fetch('/api/staff/workload');
+  allWorkload = await wRes.json();
+  renderStaffCards();
+
+  showToast(`「${proj?.name}」のステータスを「${newStatus}」に変更しました`);
+
+  // 保存アニメーション後にフィルターを再適用（行が消えることがある）
+  setTimeout(() => applyFilters(), 900);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+document.getElementById('today-date').textContent =
+  new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+loadAll();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

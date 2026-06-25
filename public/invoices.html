@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | 請求・入金管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li><a href="assignment.html"><span class="nav-icon">👤</span><span class="nav-text">担当管理</span></a></li>
+    <li><a href="customers.html"><span class="nav-icon">👥</span><span class="nav-text">顧客管理</span></a></li>
+    <li class="active"><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>💰 請求・入金管理</h1>
+    <button class="btn btn-accent" onclick="openModal()">＋ 新規請求</button>
+  </div>
+
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+    <div class="kpi-card received">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-body"><div class="kpi-label">入金済合計</div><div class="kpi-value" id="kpi-received">-</div></div>
+    </div>
+    <div class="kpi-card unpaid">
+      <div class="kpi-icon">⏳</div>
+      <div class="kpi-body"><div class="kpi-label">未入金残高</div><div class="kpi-value" id="kpi-unpaid">-</div></div>
+    </div>
+    <div class="kpi-card contracted">
+      <div class="kpi-icon">📄</div>
+      <div class="kpi-body"><div class="kpi-label">請求件数合計</div><div class="kpi-value" id="kpi-count">-</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>請求・入金一覧</span>
+      <div class="spacer"></div>
+      <select class="filter-select" id="filter-status" onchange="applyFilter()">
+        <option value="">全ステータス</option>
+        <option value="未入金">未入金のみ</option>
+        <option value="入金済">入金済のみ</option>
+      </select>
+      <input class="search-box" id="search" placeholder="🔍 案件名・顧客名で検索" oninput="applyFilter()">
+    </div>
+    <div class="card-body no-pad">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>請求番号</th><th>案件名</th><th>顧客名</th><th>請求区分</th>
+            <th>請求日</th><th style="text-align:right">請求金額</th>
+            <th>支払期限</th><th>入金状況</th><th>入金日</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="invoices-tbody"><tr><td colspan="10" class="empty-state">読込中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">新規請求登録</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-grid">
+        <div class="form-group"><label>請求番号</label><input id="f-invoice-num" placeholder="I2024-001"></div>
+        <div class="form-group"><label>請求区分</label>
+          <select id="f-type">
+            <option>着手金</option><option>中間金</option><option>完了金</option><option>一括</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>案件名 *</label><input id="f-project"></div>
+        <div class="form-group"><label>顧客名</label><input id="f-customer"></div>
+        <div class="form-group"><label>請求金額（円）*</label><input id="f-amount" type="number" min="0" value="0"></div>
+        <div class="form-group"><label>請求日</label><input id="f-invoice-date" type="date"></div>
+        <div class="form-group"><label>支払期限</label><input id="f-due-date" type="date"></div>
+        <div class="form-group"><label>入金状況</label>
+          <select id="f-status">
+            <option value="未入金">未入金</option>
+            <option value="入金済">入金済</option>
+          </select>
+        </div>
+        <div class="form-group"><label>入金日</label><input id="f-payment-date" type="date"></div>
+        <div class="form-group full"><label>備考</label><textarea id="f-notes"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-success" onclick="saveInvoice()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allInvoices = [];
+const fmt = v => new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(v||0);
+
+async function loadInvoices() {
+  const res = await fetch('/api/invoices');
+  allInvoices = await res.json();
+  const received = allInvoices.filter(i => i.payment_status==='入金済').reduce((s,i)=>s+(i.amount||0),0);
+  const unpaid   = allInvoices.filter(i => i.payment_status==='未入金').reduce((s,i)=>s+(i.amount||0),0);
+  document.getElementById('kpi-received').textContent = fmt(received);
+  document.getElementById('kpi-unpaid').textContent = fmt(unpaid);
+  document.getElementById('kpi-count').textContent = `${allInvoices.length} 件`;
+  applyFilter();
+}
+
+function applyFilter() {
+  const st = document.getElementById('filter-status').value;
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = allInvoices.filter(i =>
+    (!st || i.payment_status === st) &&
+    (!q || (i.project_name||'').toLowerCase().includes(q) || (i.customer_name||'').toLowerCase().includes(q))
+  );
+  renderTable(filtered);
+}
+
+function payBadge(status, due) {
+  const today = new Date();
+  const dueDate = due ? new Date(due) : null;
+  if (status === '入金済') return '<span class="badge badge-paid">入金済</span>';
+  if (dueDate && dueDate < today) return '<span class="badge badge-overdue">期限超過</span>';
+  return '<span class="badge badge-unpaid">未入金</span>';
+}
+
+function renderTable(invoices) {
+  const tbody = document.getElementById('invoices-tbody');
+  if (!invoices.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty-state">該当する請求がありません</td></tr>'; return; }
+  tbody.innerHTML = invoices.map(inv => {
+    const today = new Date();
+    const isOverdue = inv.payment_status !== '入金済' && inv.due_date && new Date(inv.due_date) < today;
+    return `<tr${isOverdue ? ' style="background:#fff8f8"' : ''}>
+      <td style="font-size:12px;color:var(--text-muted)">${inv.invoice_number||'-'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${inv.project_name||'-'}</td>
+      <td>${inv.customer_name||'-'}</td>
+      <td><span class="badge" style="background:#f0f4ff;color:#1e3a5f">${inv.invoice_type||'-'}</span></td>
+      <td style="font-size:12px">${inv.invoice_date||'-'}</td>
+      <td class="amount">${fmt(inv.amount)}</td>
+      <td style="font-size:12px${isOverdue?' ;color:var(--danger);font-weight:600':''}">
+        ${inv.due_date||'-'}${isOverdue?' ⚠️':''}
+      </td>
+      <td>${payBadge(inv.payment_status, inv.due_date)}</td>
+      <td style="font-size:12px">${inv.payment_date||'-'}</td>
+      <td style="white-space:nowrap">
+        ${inv.payment_status==='未入金' ? `<button class="btn btn-success btn-sm" onclick="markPaid(${inv.id})">入金済に</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="editInvoice(${inv.id})">編集</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteInvoice(${inv.id})">削除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openModal(invoice) {
+  document.getElementById('modal-title').textContent = invoice ? '請求編集' : '新規請求登録';
+  if (invoice) {
+    document.getElementById('edit-id').value = invoice.id;
+    document.getElementById('f-invoice-num').value = invoice.invoice_number||'';
+    document.getElementById('f-project').value = invoice.project_name||'';
+    document.getElementById('f-customer').value = invoice.customer_name||'';
+    document.getElementById('f-type').value = invoice.invoice_type||'着手金';
+    document.getElementById('f-amount').value = invoice.amount||0;
+    document.getElementById('f-invoice-date').value = invoice.invoice_date||'';
+    document.getElementById('f-due-date').value = invoice.due_date||'';
+    document.getElementById('f-status').value = invoice.payment_status||'未入金';
+    document.getElementById('f-payment-date').value = invoice.payment_date||'';
+    document.getElementById('f-notes').value = invoice.notes||'';
+  } else {
+    document.getElementById('edit-id').value = '';
+    ['f-invoice-num','f-project','f-customer','f-notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('f-type').value = '着手金';
+    document.getElementById('f-amount').value = 0;
+    document.getElementById('f-invoice-date').value = '';
+    document.getElementById('f-due-date').value = '';
+    document.getElementById('f-status').value = '未入金';
+    document.getElementById('f-payment-date').value = '';
+  }
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function editInvoice(id) { openModal(allInvoices.find(i=>i.id===id)); }
+
+async function saveInvoice() {
+  const project = document.getElementById('f-project').value.trim();
+  if (!project) { showToast('案件名を入力してください'); return; }
+  const id = document.getElementById('edit-id').value;
+  const body = {
+    invoice_number: document.getElementById('f-invoice-num').value,
+    project_name: project,
+    customer_name: document.getElementById('f-customer').value,
+    invoice_type: document.getElementById('f-type').value,
+    amount: document.getElementById('f-amount').value,
+    invoice_date: document.getElementById('f-invoice-date').value,
+    due_date: document.getElementById('f-due-date').value,
+    payment_status: document.getElementById('f-status').value,
+    payment_date: document.getElementById('f-payment-date').value,
+    notes: document.getElementById('f-notes').value,
+  };
+  await fetch(id ? `/api/invoices/${id}` : '/api/invoices', {
+    method: id ? 'PUT' : 'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  closeModal();
+  showToast(id ? '請求情報を更新しました' : '請求を登録しました');
+  loadInvoices();
+}
+
+async function markPaid(id) {
+  const inv = allInvoices.find(i=>i.id===id);
+  if (!inv) return;
+  const today = new Date().toISOString().split('T')[0];
+  await fetch(`/api/invoices/${id}`, {
+    method: 'PUT',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...inv, payment_status:'入金済', payment_date: today})
+  });
+  showToast('入金済に更新しました');
+  loadInvoices();
+}
+
+async function deleteInvoice(id) {
+  if (!confirm('この請求を削除しますか？')) return;
+  await fetch(`/api/invoices/${id}`, { method:'DELETE' });
+  showToast('請求を削除しました');
+  loadInvoices();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+document.getElementById('modal').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeModal(); });
+
+loadInvoices();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さくらリフォーム | ダッシュボード</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .kpi-count { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🌸</span>
+    <div class="logo-text">さくらリフォーム<br><span style="font-weight:400;font-size:11px;opacity:.7">販売管理システム</span></div>
+  </div>
+  <ul class="sidebar-nav">
+    <li class="active"><a href="index.html"><span class="nav-icon">📊</span><span class="nav-text">ダッシュボード</span></a></li>
+    <li><a href="projects.html"><span class="nav-icon">📋</span><span class="nav-text">案件管理</span></a></li>
+    <li><a href="assignment.html"><span class="nav-icon">👤</span><span class="nav-text">担当管理</span></a></li>
+    <li><a href="customers.html"><span class="nav-icon">👥</span><span class="nav-text">顧客管理</span></a></li>
+    <li><a href="invoices.html"><span class="nav-icon">💰</span><span class="nav-text">請求・入金管理</span></a></li>
+  </ul>
+  <button class="sidebar-mini-toggle" id="sidebar-mini-toggle" title="折りたたむ / 展開する">
+    <span class="mini-icon">◁</span><span class="mini-label">折りたたむ</span>
+  </button>
+  <div class="sidebar-footer">株式会社さくらリフォーム<br>営業部管理システム</div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>📊 経営ダッシュボード</h1>
+    <span class="date-badge" id="today-date"></span>
+  </div>
+
+  <!-- 緊急アラート -->
+  <div id="urgent-section"></div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card contracted">
+      <div class="kpi-icon">🏆</div>
+      <div class="kpi-body">
+        <div class="kpi-label">受注総額（契約済）</div>
+        <div class="kpi-value" id="kpi-contracted">読込中…</div>
+        <div class="kpi-count" id="kpi-contracted-count"></div>
+      </div>
+    </div>
+    <div class="kpi-card received">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-body">
+        <div class="kpi-label">入金済合計</div>
+        <div class="kpi-value" id="kpi-received">読込中…</div>
+      </div>
+    </div>
+    <div class="kpi-card unpaid">
+      <div class="kpi-icon">⚠️</div>
+      <div class="kpi-body">
+        <div class="kpi-label">未入金残高</div>
+        <div class="kpi-value" id="kpi-unpaid">読込中…</div>
+      </div>
+    </div>
+    <div class="kpi-card pipeline">
+      <div class="kpi-icon">🎯</div>
+      <div class="kpi-body">
+        <div class="kpi-label">商談中・見込み額</div>
+        <div class="kpi-value" id="kpi-pipeline">読込中…</div>
+        <div class="kpi-count" id="kpi-pipeline-count"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="charts-grid">
+    <div class="card">
+      <div class="card-header">案件ステータス分布</div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">担当者別受注実績</div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="staffChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Work Type Chart -->
+  <div class="card full-width">
+    <div class="card-header">工事種別別受注金額（契約済）</div>
+    <div class="card-body">
+      <div class="chart-container">
+        <canvas id="workTypeChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tables Row -->
+  <div class="tables-grid">
+    <div class="card">
+      <div class="card-header alert-header">⚠️ 未入金一覧</div>
+      <div class="card-body no-pad">
+        <table class="data-table">
+          <thead>
+            <tr><th>案件名</th><th>顧客名</th><th style="text-align:right">請求金額</th><th>支払期限</th></tr>
+          </thead>
+          <tbody id="unpaid-list"><tr><td colspan="4" class="empty-state">読込中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">🎯 商談中案件（上位10件）</div>
+      <div class="card-body no-pad">
+        <table class="data-table">
+          <thead>
+            <tr><th>案件名</th><th>ステータス</th><th style="text-align:center">確度</th><th style="text-align:right">概算金額</th></tr>
+          </thead>
+          <tbody id="pipeline-list"><tr><td colspan="4" class="empty-state">読込中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const fmt = v => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }).format(v);
+
+const STATUS_MAP = { '契約済':'contracted','商談中':'negotiating','見積提出済':'quoted','現地調査済':'visited','初回訪問済':'surveyed','失注':'lost' };
+
+const STATUS_COLOR = {
+  '契約済':    '#1565c0',
+  '商談中':    '#d64d6e',
+  '見積提出済': '#d97706',
+  '現地調査済': '#15803d',
+  '初回訪問済': '#7c3aed',
+  '失注':      '#94a3b8',
+};
+
+function statusBadge(s) {
+  const map = { '契約済':'contracted','商談中':'negotiating','見積提出済':'quoted','現地調査済':'visited','初回訪問済':'surveyed','失注':'lost' };
+  return `<span class="badge badge-${map[s]||'lost'}">${s}</span>`;
+}
+
+// ===== 緊急アラート =====
+const URGENCY_COLLAPSED = { critical: false, warning: true };
+
+async function loadUrgent() {
+  const res = await fetch('/api/urgent');
+  const { critical, warning, total } = await res.json();
+  const sec = document.getElementById('urgent-section');
+
+  if (total === 0) {
+    sec.innerHTML = `<div class="alert-panel"><div class="alert-panel-header ok">✅ 緊急・要注意の案件はありません</div></div>`;
+    return;
+  }
+
+  function makeBlock(items, level, icon, label) {
+    if (!items.length) return '';
+    const collapsed = URGENCY_COLLAPSED[level];
+    const cls = level === 'critical' ? 'has-critical' : 'has-warning';
+    const rows = items.map(p => {
+      const amount = p.status === '契約済' ? fmt(p.contract_amount) : fmt(p.estimated_amount);
+      return `<div class="alert-item">
+        <span class="alert-dot ${level}"></span>
+        <a href="projects.html"><strong>${p.name}</strong></a>
+        <span style="color:var(--text-muted);font-size:12px">${p.customer_name||''}</span>
+        <span class="badge badge-${STATUS_MAP[p.status]||'lost'}" style="font-size:11px">${p.status}</span>
+        <span class="alert-reason ${level}">${p.urgency_reason}</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">${p.staff||'<span style="color:#dc2626">未割り当て</span>'}</span>
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${amount}</span>
+      </div>`;
+    }).join('');
+    return `
+      <div class="alert-panel-header ${cls}" onclick="toggleUrgency('${level}', this)">
+        ${icon} ${label}
+        <span class="alert-count-badge ${level}">${items.length}件</span>
+        <span class="alert-toggle" id="toggle-${level}">${collapsed ? '▶ 展開' : '▼ 閉じる'}</span>
+      </div>
+      <div class="alert-body" id="alerts-${level}" style="${collapsed ? 'display:none' : ''}">${rows}</div>`;
+  }
+
+  sec.innerHTML = `<div class="alert-panel">
+    ${makeBlock(critical, 'critical', '🚨', '緊急対応が必要な案件')}
+    ${makeBlock(warning, 'warning', '⚠️', '要注意・フォローが必要な案件')}
+  </div>`;
+}
+
+function toggleUrgency(level, headerEl) {
+  const body = document.getElementById('alerts-' + level);
+  const tog  = document.getElementById('toggle-' + level);
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  tog.textContent = hidden ? '▼ 閉じる' : '▶ 展開';
+  URGENCY_COLLAPSED[level] = !hidden;
+}
+
+async function loadDashboard() {
+  const res = await fetch('/api/dashboard');
+  const d = await res.json();
+
+  document.getElementById('kpi-contracted').textContent = fmt(d.kpi.contractedAmount);
+  document.getElementById('kpi-contracted-count').textContent = `全${d.kpi.projectCount}件中 契約済`;
+  document.getElementById('kpi-received').textContent = fmt(d.kpi.receivedAmount);
+  document.getElementById('kpi-unpaid').textContent = fmt(d.kpi.unpaidAmount);
+  document.getElementById('kpi-pipeline').textContent = fmt(d.kpi.pipelineAmount);
+  document.getElementById('kpi-pipeline-count').textContent = `商談中 ${d.kpi.activeCount}件`;
+
+  renderStatusChart(d.statusDist);
+  renderStaffChart(d.staffPerf);
+  renderWorkTypeChart(d.workTypeBreak);
+  renderUnpaid(d.unpaidInvoices);
+  renderPipeline(d.pipelineProj);
+}
+
+function renderStatusChart(data) {
+  const labels = data.map(x => x.status);
+  const counts = data.map(x => x.count);
+  const colors = labels.map(l => STATUS_COLOR[l] || '#ccc');
+  new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}件` } }
+      }
+    }
+  });
+}
+
+function renderStaffChart(data) {
+  new Chart(document.getElementById('staffChart'), {
+    type: 'bar',
+    data: {
+      labels: data.map(x => x.staff),
+      datasets: [{
+        label: '受注金額',
+        data: data.map(x => x.total),
+        backgroundColor: '#1a2e4a',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)}` } } },
+      scales: {
+        x: { ticks: { callback: v => (v/10000)+'万' }, grid: { color: '#f0f0f0' } },
+        y: { ticks: { font: { size: 12 } } }
+      }
+    }
+  });
+}
+
+function renderWorkTypeChart(data) {
+  const palette = ['#1565c0','#d64d6e','#d97706','#15803d','#7c3aed','#0891b2','#ea580c'];
+  new Chart(document.getElementById('workTypeChart'), {
+    type: 'bar',
+    data: {
+      labels: data.map(x => x.work_type),
+      datasets: [{
+        label: '受注金額',
+        data: data.map(x => x.total),
+        backgroundColor: data.map((_, i) => palette[i % palette.length]),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)}` } } },
+      scales: {
+        y: { ticks: { callback: v => (v/10000)+'万' }, grid: { color: '#f0f0f0' } }
+      }
+    }
+  });
+}
+
+function renderUnpaid(invoices) {
+  const tbody = document.getElementById('unpaid-list');
+  if (!invoices.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-state">未入金の請求はありません</td></tr>'; return; }
+  tbody.innerHTML = invoices.map(inv => {
+    const today = new Date(); const due = new Date(inv.due_date);
+    const overdue = due < today;
+    const dueCls = overdue ? 'style="color:var(--danger);font-weight:600"' : '';
+    return `<tr>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.project_name}</td>
+      <td>${inv.customer_name}</td>
+      <td class="amount">${fmt(inv.amount)}</td>
+      <td ${dueCls}>${inv.due_date||'-'}${overdue?' ⚠️':''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPipeline(projects) {
+  const tbody = document.getElementById('pipeline-list');
+  if (!projects.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-state">商談中案件なし</td></tr>'; return; }
+  tbody.innerHTML = projects.map(p => `<tr>
+    <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</td>
+    <td>${statusBadge(p.status)}</td>
+    <td class="center">
+      <div class="prob-bar">
+        <div class="bar-bg"><div class="bar-fill" style="width:${p.probability}%"></div></div>
+        <span class="bar-label">${p.probability}%</span>
+      </div>
+    </td>
+    <td class="amount">${fmt(p.estimated_amount)}</td>
+  </tr>`).join('');
+}
+
+document.getElementById('today-date').textContent =
+  new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+loadUrgent();
+loadDashboard();
+</script>
+<script src="app.js"></script>
+</body>
+</html>
